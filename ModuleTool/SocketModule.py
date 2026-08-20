@@ -91,6 +91,7 @@ class Server:
                 # 启动专属接收线程（仅传唯一ID）
                 threading.Thread(target=self._recv_client, args=(conn, client_id), daemon=True).start()
                 for function, args, kwargs in self.connect_hook:
+                    # print(function, args, kwargs)
                     function(client_id, *args, **kwargs)
             except (socket.error, OSError):
                 break
@@ -156,31 +157,40 @@ class Server:
             try: info["socket"].close()
             except: pass
             ip = info["ip"]
-            del self.clients[client_id]
-            print(f"[服务器] 断开 | ID:{client_id} | IP:{ip}")
             for function, args, kwargs in self.disconnect_hook:
                 function(client_id, *args, **kwargs)
+            try:
+                del self.clients[client_id]
+            except KeyError: pass
+            print(f"[服务器] 断开 | ID:{client_id} | IP:{ip}")
 
     #  核心对外接口（唯一ID）
-    def send_to(self, client_id: str, data: bytes):
+    def send_to(self, client_id: str, data: bytes, handle=False):
         """
         向【指定唯一ID】的客户端发消息
         （同一主机的多个客户端，ID不同，精准发送）
         """
         if client_id in self.clients:
-            self.send_queue.put((client_id, data))
+            if handle:
+                self.send_queue.put((client_id, self.msg_handle(client_id, data)))
+            else:
+                self.send_queue.put((client_id, data))
 
-    def send_to_json(self, client_id, json_data):
+    # 可被继承的处理方式
+    def msg_handle(self, client_id, data):
+        return data
+
+    def send_to_json(self, client_id, json_data, handle=False):
         json_data_b = json.dumps(json_data, ensure_ascii=False).encode()
-        self.send_to(client_id, json_data_b)
+        self.send_to(client_id, json_data_b, handle)
 
     # 请求式消息案例
     @response
-    def version(self):
+    def version(self, client_id):
         return 3.0
 
     # 请求方法，用户可直接调用
-    def request(self, client_id, name, headers, timeout=5):
+    def request(self, client_id, name, headers={}, timeout=5):
         message = {
             "type": "__request__",
             "_name": name,
@@ -221,7 +231,7 @@ class Server:
                 self.send_to(client_id, message_b)
                 return
 
-            result = method(**headers)
+            result = method(client_id, **headers)
             message = {
                 "type": "__response__",
                 "name": name,
@@ -233,7 +243,7 @@ class Server:
             message = {
                 "type": "__response__",
                 "name": name,
-                "result": {"error": e}
+                "result": {"error": f"{e}"}
             }
             message_b = json.dumps(message, ensure_ascii=False).encode()
             self.send_to(client_id, message_b)
@@ -378,17 +388,24 @@ class Client:
             data += chunk
         return data
 
-    def send(self, data: bytes):
+    def send(self, data: bytes, handle=False):
         """向服务器发送数据（仅入队列，异步发送）"""
-        self.send_queue.put(data)
+
+        if handle:
+            self.send_queue.put(self.msg_handle(data))
+        else:
+            self.send_queue.put(data)
+
+    def msg_handle(self, data):
+        return data
 
     # 新增：JSON数据发送快捷方法
-    def send_json(self, json_data):
+    def send_json(self, json_data, handle=False):
         json_data_b = json.dumps(json_data, ensure_ascii=False).encode()
-        self.send(json_data_b)
+        self.send(json_data_b, handle=handle)
 
     # 新增：客户端发起请求（调用服务器方法）
-    def request(self, name, headers, timeout=5):
+    def request(self, name, headers={}, timeout=5):
         message = {
             "type": "__request__",
             "_name": name,
