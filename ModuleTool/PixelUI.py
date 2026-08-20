@@ -706,7 +706,7 @@ class Module:
     def config(self, *args, **kwargs):
         self.main_frame.config(*args, **kwargs)
 
-# 文本框 ==================================================================
+# 标签文本 ==================================================================
 class Label(Module):
     def __init__(self, root, text='', bg=col_dict["main"], fg=col_dict["text"], font_size=11, font_weight='bold',
                  anchor='w', width=None):
@@ -762,6 +762,9 @@ class Button(Module):
         self.label.bind("<Leave>", self._leave)  # 鼠标离开控件区域
 
         self.main_frame = self.show_label
+
+    def configure(self, *args, **kwargs):
+        self.label.configure(*args, **kwargs)
 
     def _enter(self, e):
         if self.switch:
@@ -1002,7 +1005,6 @@ class CheckBox(Module):
                     if check_box == self:
                         continue
                     else:
-                        print(check_box)
                         if check_box.get():
                             check_box.click(0)
             else:
@@ -1068,7 +1070,7 @@ class ProgressBar(Module):
 
 # 加载条（无进度）==================================================================
 class LoadingBar(Module):
-    def __init__(self, root, title=None, length=200, width=10):
+    def __init__(self, root, title=None, length=200, width=10, font_size=8):
         super().__init__()
         self.bar_x = - length * 0.3
         self.length = length
@@ -1078,10 +1080,10 @@ class LoadingBar(Module):
 
         self.show_label = tk.Frame(root)
         if title:
-            self.title_label = Label(self.show_label, title, font_size=width)
+            self.title_label = Label(self.show_label, title, font_size=font_size)
             self.title_label.pack(side='left')
         self.bar_bg = tk.Frame(self.show_label, width=length, height=width, bg=col_dict['bg'])
-        self.bar_bg.pack(side='left', expand=True, fill='y')
+        self.bar_bg.pack(side='left')
 
         self.bar = tk.Frame(self.bar_bg, width=length * 0.3, height=width, bg=col_dict['light'])
         self.bar.place(x=self.bar_x, y=0)
@@ -1093,10 +1095,13 @@ class LoadingBar(Module):
         self.bar.configure(width=self.length * 0.3, bg=col_dict['light'])
         self.update()
 
-    def done(self):
+    def done(self, pass_mode=True):
         self.run = False
         self.bar_x = self.length
-        self.bar.configure(width=self.length, bg=col_dict['pass'])
+        if pass_mode:
+            self.bar.configure(width=self.length, bg=col_dict['pass'])
+        else:
+            self.bar.configure(width=self.length, bg=col_dict['bg'])
         self.bar.place(x=0, y=0)
 
     def update(self):
@@ -1106,7 +1111,7 @@ class LoadingBar(Module):
                 if self.bar_x > self.length * 1.3:
                     self.bar_x = - self.length * 0.3
                 self.bar.place(x=self.bar_x, y=0)
-                self.root.after(100, self.update)
+                self.root.after(50, self.update)
             except: pass
         else:
             return
